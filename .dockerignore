@@ -1,0 +1,14 @@
+.venv
+.data
+web/node_modules
+web/dist
+**/__pycache__
+.pytest_cache
+.git
+.env
+.env.*
+*.pem
+*.key
+*.sqlite3
+.DS_Store
+*.log

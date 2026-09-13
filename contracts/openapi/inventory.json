@@ -1,0 +1,196 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UnumDCIM inventory",
+    "version": "0.1.0",
+    "description": "Foundation API. Production human access requires signed OIDC access tokens with MFA; synthetic static identities are demo-only."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/assets": {
+      "get": {
+        "operationId": "inventory_get__assets",
+        "responses": {
+          "200": {
+            "description": "Successful result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Revision, ownership, occupancy or workflow conflict"
+          },
+          "503": {
+            "description": "Dependency temporarily unavailable"
+          }
+        }
+      }
+    },
+    "/assets/{asset_id}": {
+      "get": {
+        "operationId": "inventory_get__assets_asset_id",
+        "responses": {
+          "200": {
+            "description": "Successful result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Revision, ownership, occupancy or workflow conflict"
+          },
+          "503": {
+            "description": "Dependency temporarily unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "inventory_patch__assets_asset_id",
+        "responses": {
+          "200": {
+            "description": "Successful result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Revision, ownership, occupancy or workflow conflict"
+          },
+          "503": {
+            "description": "Dependency temporarily unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "expected_revision"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "expected_revision": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "MoveProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "asset_id",
+          "rack_id",
+          "u",
+          "face",
+          "expected_revision",
+          "authority_epoch",
+          "site",
+          "idempotency_key"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string"
+          },
+          "rack_id": {
+            "type": "string"
+          },
+          "u": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "face": {
+            "enum": [
+              "front",
+              "rear"
+            ]
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "authority_epoch": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "site": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      }
+    }
+  }
+}

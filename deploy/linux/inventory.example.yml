@@ -1,0 +1,20 @@
+all:
+  children:
+    unum_app_hosts:
+      hosts:
+        app01.example.internal:
+          unum_bind_address: 10.0.10.11
+          unum_modules:
+            - {name: inventory, port: 8101, image: "REPLACE_WITH_IMMUTABLE_IMAGE"}
+            - {name: placement, port: 8102, image: "REPLACE_WITH_IMMUTABLE_IMAGE"}
+        app02.example.internal:
+          unum_bind_address: 10.0.10.12
+          unum_modules:
+            - {name: inventory, port: 8101, image: "REPLACE_WITH_IMMUTABLE_IMAGE"}
+            - {name: placement, port: 8102, image: "REPLACE_WITH_IMMUTABLE_IMAGE"}
+        workflow01.example.internal:
+          unum_bind_address: 10.0.10.13
+          unum_modules:
+            - {name: workflow, port: 8103, image: "REPLACE_WITH_IMMUTABLE_IMAGE"}
+    # Supply at least three independent data hosts in the qualified HA cell.
+    # Database/bootstrap secrets and infrastructure deployment are not supplied.

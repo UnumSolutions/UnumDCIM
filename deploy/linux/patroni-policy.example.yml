@@ -1,0 +1,17 @@
+# Policy fragment for a qualified Patroni cluster, NOT a complete bootstrap config.
+# Provide three PostgreSQL data nodes, three etcd members, TLS, fencing, credentials,
+# replication users, private endpoints, backups and redundant database routing.
+ttl: 30
+loop_wait: 10
+retry_timeout: 10
+maximum_lag_on_failover: 0
+synchronous_mode: true
+synchronous_mode_strict: true
+synchronous_node_count: 1
+postgresql:
+  use_pg_rewind: true
+  parameters:
+    synchronous_commit: "on"
+    wal_level: replica
+    archive_mode: "on"
+    # Provide an actual verified archive_command via secret-managed configuration.

@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-migrate-{{ .Release.Revision }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001}
+      containers:
+        - name: migrate
+          image: {{ .Values.image | quote }}
+          command: [python, manage.py, migrate, --noinput]
+          envFrom:
+            - secretRef: {name: {{ required "migrationSecret is required" .Values.migrationSecret }}}
+          env:
+            - {name: UNUM_SERVICE, value: {{ .Values.module | quote }}}
+            - {name: UNUM_DEMO, value: "0"}
+            - {name: PGSSLROOTCERT, value: /etc/unum/postgres/ca.crt}
+            - {name: PGSSLMODE, value: verify-full}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: postgres-ca, mountPath: /etc/unum/postgres, readOnly: true}
+      volumes:
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
+        - name: postgres-ca
+          secret: {secretName: {{ .Values.postgresCaSecret }}}

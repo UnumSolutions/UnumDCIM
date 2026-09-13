@@ -1,0 +1,61 @@
+{
+  "scope": {
+    "tenant": "example",
+    "connection": "nlyte-lab",
+    "entity": "linked-server-1"
+  },
+  "baseline": {
+    "name": "server-01",
+    "asset_tag": "AT-1"
+  },
+  "owners": {
+    "name": "nlyte",
+    "asset_tag": "nlyte"
+  },
+  "writable": {
+    "nlyte": [
+      "name",
+      "asset_tag"
+    ],
+    "unum": [
+      "name",
+      "asset_tag"
+    ]
+  },
+  "previous": {
+    "nlyte": {
+      "revision": "example-etag-1",
+      "values": {
+        "name": "server-renamed-in-nlyte",
+        "asset_tag": "AT-1"
+      },
+      "observation_id": "observation-1"
+    },
+    "unum": {
+      "revision": "example-etag-1",
+      "values": {
+        "name": "server-01",
+        "asset_tag": "AT-2"
+      },
+      "observation_id": "observation-1"
+    }
+  },
+  "current": {
+    "nlyte": {
+      "revision": "example-etag-1",
+      "values": {
+        "name": "server-renamed-in-nlyte",
+        "asset_tag": "AT-1"
+      },
+      "observation_id": "observation-2"
+    },
+    "unum": {
+      "revision": "example-etag-1",
+      "values": {
+        "name": "server-01",
+        "asset_tag": "AT-2"
+      },
+      "observation_id": "observation-2"
+    }
+  }
+}

@@ -1,0 +1,256 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UnumDCIM workflow",
+    "version": "0.1.0",
+    "description": "Foundation API. Production human access requires signed OIDC access tokens with MFA; synthetic static identities are demo-only."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/changes": {
+      "get": {
+        "operationId": "workflow_get__changes",
+        "responses": {
+          "200": {
+            "description": "Successful result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Revision, ownership, occupancy or workflow conflict"
+          },
+          "503": {
+            "description": "Dependency temporarily unavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "workflow_post__changes",
+        "responses": {
+          "200": {
+            "description": "Successful result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Revision, ownership, occupancy or workflow conflict"
+          },
+          "503": {
+            "description": "Dependency temporarily unavailable"
+          },
+          "201": {
+            "description": "Created when applicable"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveProposal"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/changes/{change_id}/approve": {
+      "post": {
+        "operationId": "workflow_post__changes_change_id_approve",
+        "responses": {
+          "200": {
+            "description": "Successful result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Revision, ownership, occupancy or workflow conflict"
+          },
+          "503": {
+            "description": "Dependency temporarily unavailable"
+          },
+          "201": {
+            "description": "Created when applicable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expected_revision"
+                ],
+                "properties": {
+                  "expected_revision": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/changes/{change_id}/execute": {
+      "post": {
+        "operationId": "workflow_post__changes_change_id_execute",
+        "responses": {
+          "200": {
+            "description": "Successful result"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Definitive plan rejection may return the change in replan_required. Repeated execution of that terminal change returns code replan_required."
+          },
+          "503": {
+            "description": "Outcome may be ambiguous; the change stays executing and must be retried using the same change ID."
+          },
+          "201": {
+            "description": "Created when applicable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "See service contract and synthetic rehearsal examples; reserved foundation operation."
+              }
+            }
+          }
+        },
+        "description": "Executes or resumes one approved move with a stable reservation ID. Transient dependency failures retain executing; retry the same change ID. Definitive reservation expiry or plan rejection transitions to terminal replan_required. Refresh placement, submit a new proposal with a new idempotency key and obtain a separate approval. Completed retries return the recorded result without moving twice."
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "MoveProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "asset_id",
+          "rack_id",
+          "u",
+          "face",
+          "expected_revision",
+          "authority_epoch",
+          "site",
+          "idempotency_key"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string"
+          },
+          "rack_id": {
+            "type": "string"
+          },
+          "u": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "face": {
+            "enum": [
+              "front",
+              "rear"
+            ]
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "authority_epoch": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "site": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "ChangeState": {
+        "type": "string",
+        "enum": [
+          "awaiting_approval",
+          "awaiting_nlyte",
+          "approved",
+          "executing",
+          "replan_required",
+          "completed"
+        ]
+      }
+    }
+  }
+}

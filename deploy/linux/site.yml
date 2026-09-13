@@ -1,0 +1,62 @@
+---
+- name: Install independently placed application modules
+  hosts: unum_app_hosts
+  become: true
+  serial: 1
+  tasks:
+    - name: Verify explicit image pins and application network binding
+      ansible.builtin.assert:
+        that:
+          - item.image is match('^.+@sha256:[a-f0-9]{64}$')
+          - item.name in ['inventory', 'placement', 'workflow', 'synchronization', 'registry']
+          - unum_bind_address is defined
+          - unum_bind_address != '0.0.0.0'
+        fail_msg: "Supply verified immutable images and a private bind address before deployment."
+      loop: "{{ unum_modules }}"
+    - name: Ensure Podman is installed
+      ansible.builtin.package:
+        name: podman
+        state: present
+    - name: Create Quadlet directory
+      ansible.builtin.file:
+        path: /etc/containers/systemd
+        state: directory
+        mode: '0755'
+    - name: Require separately provisioned secret files
+      ansible.builtin.stat:
+        path: "/etc/unum/{{ item.name }}.env"
+      loop: "{{ unum_modules }}"
+      register: secret_files
+    - name: Check secret file permissions
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.mode == '0600'
+          - item.stat.isreg
+          - item.stat.uid == 0
+        fail_msg: "Provision root-readable module-specific credentials; this playbook never generates shared credentials."
+      loop: "{{ secret_files.results }}"
+      no_log: true
+    - name: Install module unit
+      ansible.builtin.template:
+        src: module.container.j2
+        dest: "/etc/containers/systemd/unum-{{ item.name }}.container"
+        mode: '0644'
+      loop: "{{ unum_modules }}"
+    - name: Reload systemd generators
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+    - name: Restart one host's module services
+      ansible.builtin.systemd_service:
+        name: "unum-{{ item.name }}.service"
+        state: restarted
+      loop: "{{ unum_modules }}"
+    - name: Wait for dependency-aware readiness
+      ansible.builtin.uri:
+        url: "http://{{ unum_bind_address }}:{{ item.port }}/ready"
+        status_code: 200
+      register: readiness
+      retries: 12
+      delay: 5
+      until: readiness.status == 200
+      loop: "{{ unum_modules }}"

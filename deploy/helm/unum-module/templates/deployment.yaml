@@ -1,0 +1,76 @@
+{{- if not (has .Values.module (list "inventory" "placement" "workflow" "synchronization" "registry")) }}
+{{- fail "module must name one implemented domain" }}
+{{- end }}
+{{- if not (regexMatch "^https://[^/]+" .Values.oidc.issuer) }}
+{{- fail "oidc.issuer must be an HTTPS issuer" }}
+{{- end }}
+{{- if not (regexMatch "^https://[^/]+" .Values.oidc.jwksUri) }}
+{{- fail "oidc.jwksUri must be a trusted HTTPS JWKS URI" }}
+{{- end }}
+{{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" .Values.image) }}
+{{- fail "image must be pinned to an immutable sha256 digest" }}
+{{- end }}
+{{- if lt (int .Values.replicas) 2 }}
+{{- fail "This HA application template requires at least two replicas" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  selector:
+    matchLabels: {app: {{ .Release.Name }}}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: {app: {{ .Release.Name }}}
+      containers:
+        - name: service
+          image: {{ .Values.image | quote }}
+          ports: [{containerPort: 8000}]
+          envFrom:
+            - secretRef: {name: {{ required "existingSecret is required" .Values.existingSecret }}}
+          env:
+            - {name: UNUM_SERVICE, value: {{ .Values.module | quote }}}
+            - {name: UNUM_DEMO, value: "0"}
+            - {name: UNUM_OIDC_ISSUER, value: {{ .Values.oidc.issuer | quote }}}
+            - {name: UNUM_OIDC_AUDIENCE, value: {{ required "oidc.audience is required" .Values.oidc.audience | quote }}}
+            - {name: UNUM_OIDC_JWKS_URI, value: {{ .Values.oidc.jwksUri | quote }}}
+            - {name: UNUM_OIDC_SCOPE, value: {{ .Values.oidc.scope | quote }}}
+            - {name: UNUM_OIDC_ROLE_CLAIM, value: {{ .Values.oidc.roleClaim | quote }}}
+            - {name: UNUM_OIDC_TENANT_CLAIM, value: {{ .Values.oidc.tenantClaim | quote }}}
+            - {name: UNUM_OIDC_SITES_CLAIM, value: {{ .Values.oidc.sitesClaim | quote }}}
+            - {name: UNUM_OIDC_MFA_ACR_VALUES, value: {{ .Values.oidc.mfaAcrValues | toJson | quote }}}
+            - {name: UNUM_ALLOWED_HOSTS, value: {{ required "allowedHosts is required" .Values.allowedHosts | quote }}}
+            - {name: UNUM_SERVICE_URLS, value: {{ .Values.serviceUrls | toJson | quote }}}
+            - {name: UNUM_NATS_URL, value: {{ .Values.natsUrl | quote }}}
+            - {name: PGSSLROOTCERT, value: /etc/unum/postgres/ca.crt}
+            - {name: PGSSLMODE, value: verify-full}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          readinessProbe: {httpGet: {path: /ready, port: 8000}, initialDelaySeconds: 3, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /health, port: 8000}, initialDelaySeconds: 10, periodSeconds: 10}
+          resources: {{ .Values.resources | toJson }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            - {name: postgres-ca, mountPath: /etc/unum/postgres, readOnly: true}
+      volumes:
+        - name: tmp
+          emptyDir: {medium: Memory, sizeLimit: 64Mi}
+        - name: postgres-ca
+          secret: {secretName: {{ required "postgresCaSecret is required" .Values.postgresCaSecret }}}

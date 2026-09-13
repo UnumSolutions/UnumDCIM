@@ -1,0 +1,33 @@
+{
+  "manifest_version": 1,
+  "id": "workflow",
+  "version": "0.1.0",
+  "status": "implemented",
+  "maturity": "foundation",
+  "release_channel": "development",
+  "supported_until": "2026-12-31",
+  "provides": [
+    "unum.changes/1"
+  ],
+  "requires": {
+    "inventory": "unum.inventory/1",
+    "placement": "unum.scene/1"
+  },
+  "tested_with": {
+    "inventory": [
+      "0.1.0"
+    ],
+    "placement": [
+      "0.1.0"
+    ]
+  },
+  "permissions": [],
+  "artifact": null,
+  "migration": {
+    "phase": "expand",
+    "compatible_application_versions": [
+      "0.1.0"
+    ]
+  },
+  "notes": "Local foundation only. No LTS or HA qualification. Published artifacts are not available."
+}

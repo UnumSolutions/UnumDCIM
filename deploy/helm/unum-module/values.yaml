@@ -1,0 +1,21 @@
+module: inventory
+image: "" # Required immutable registry/repository@sha256:digest
+replicas: 2
+existingSecret: "" # UNUM_SECRET_KEY, scoped service tokens, restricted runtime PostgreSQL credentials
+migrationSecret: "" # Separate migration-role credentials; application role must not own tables
+allowedHosts: ""
+serviceUrls: {}
+natsUrl: ""
+oidc:
+  issuer: "" # Required HTTPS issuer; identical across cooperating modules
+  audience: "" # Required shared API audience, not the UI client ID
+  jwksUri: "" # Required trusted HTTPS JWKS URI; never inferred from token headers
+  scope: unum.api
+  roleClaim: unum_role
+  tenantClaim: unum_tenant
+  sitesClaim: unum_sites
+  mfaAcrValues: [] # Accepted provider-specific MFA acr values; amr containing mfa is always accepted
+postgresCaSecret: "" # ca.crt for PostgreSQL verify-full; required
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: "1", memory: 512Mi}

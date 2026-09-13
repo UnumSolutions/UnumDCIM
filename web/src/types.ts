@@ -1,0 +1,11 @@
+export type Asset = {id:string;site:string;name:string;manufacturer:string;model:string;serial:string;asset_tag:string;height_u:number;watts:number;lifecycle:string;revision:number};
+export type Rack = {id:string;room_id:string;label:string;x:number;y:number;height_u:number;budget_watts:number};
+export type Placement = {asset_id:string;rack_id:string;u:number;height_u:number;face:'front'|'rear';owner:string;revision:number};
+export type Room = {id:string;site:string;site_name:string;name:string;region?:string;country?:string;state?:string;city?:string;room_type?:'room'|'data_hall'|'mdf'|'idf'};
+export type Scene = {contract:string;generated_at:string;rooms:Room[];racks:Rack[];placements:Placement[];authority:{site:string;epoch:number;local:boolean;connected:boolean}[]};
+export type Change = {id:string;site:string;proposer:string;approver:string;state:string;error:string;revision:number;payload:{asset_id:string;rack_id:string;u:number;face:'front'|'rear';expected_revision:number;authority_epoch:number};created_at:string};
+export type Conflict = {id:string;entity:string;field:string;owner:string;baseline:unknown;candidates:Record<string,unknown>;state:string;revision:number;observed_at:string;resolution:unknown};
+export type SyncState = {live_write_enabled:boolean;connections:{id:string;label:string;state:string}[];conflicts:Conflict[]};
+export type View = 'plan'|'3d'|'elevation'|'walk';
+export type Overlay = 'none'|'capacity'|'heat'|'power'|'network';
+export type Ghost = {asset_id:string;rack_id:string;u:number;face:'front'|'rear'};

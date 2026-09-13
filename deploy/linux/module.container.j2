@@ -1,0 +1,28 @@
+[Unit]
+Description=UnumDCIM {{ item.name }} module
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ item.image }}
+ContainerName=unum-{{ item.name }}
+EnvironmentFile=/etc/unum/{{ item.name }}.env
+Environment=UNUM_SERVICE={{ item.name }}
+Environment=UNUM_DEMO=0
+PublishPort={{ unum_bind_address }}:{{ item.port }}:8000
+ReadOnly=true
+User=10001
+DropCapability=all
+NoNewPrivileges=true
+Tmpfs=/tmp:rw,size=64m
+# Provision trust material locally; credentials refer to paths inside this mount.
+Volume=/etc/unum/trust:/etc/unum/trust:ro
+
+[Service]
+Restart=on-failure
+RestartSec=5
+MemoryMax=768M
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

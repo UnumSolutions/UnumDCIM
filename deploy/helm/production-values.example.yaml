@@ -1,0 +1,21 @@
+# Copy for one module and replace all placeholders before deployment.
+module: inventory
+image: "REPLACE_WITH_REGISTRY_AND_IMAGE@sha256:REPLACE_WITH_VERIFIED_DIGEST"
+replicas: 2
+existingSecret: unum-inventory-runtime
+migrationSecret: unum-inventory-migration
+postgresCaSecret: unum-postgres-ca
+allowedHosts: inventory.example.internal
+serviceUrls:
+  inventory: https://inventory.example.internal
+  placement: https://placement.example.internal
+natsUrl: tls://nats.example.internal:4222
+oidc:
+  issuer: https://identity.example.internal/realms/unum
+  audience: unum-api
+  jwksUri: https://identity.example.internal/realms/unum/protocol/openid-connect/certs
+  scope: unum.api
+  roleClaim: unum_role
+  tenantClaim: unum_tenant
+  sitesClaim: unum_sites
+  mfaAcrValues: []
