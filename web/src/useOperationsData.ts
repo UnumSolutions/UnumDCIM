@@ -21,5 +21,5 @@ export function useOperationsData(role:string) {
       store.invalidate();
     };
   },[store]);
-  return {...data,refresh:store.refresh};
+  return {...data,refresh:store.refresh,olderChanges:store.olderChanges,newerChanges:store.newerChanges};
 }

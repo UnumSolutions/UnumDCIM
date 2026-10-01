@@ -3,6 +3,7 @@
 No vendor routes, field names, authentication behavior, or completeness rules are
 inferred. Reports contain aggregate evidence only; no records or baseline writes.
 """
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import ipaddress
@@ -266,19 +267,64 @@ def fixture_transport(data):
     return httpx.MockTransport(handle)
 
 
+async def _read_page(client, url, config, deadline):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        _fail("duration_limit")
+    # HTTPX timeouts apply to individual I/O operations. Cancellation also caps
+    # the whole request, including connection setup, headers and a slow body.
+    async with asyncio.timeout(remaining):
+        async with client.stream("GET", url, timeout=min(config.timeout_seconds, remaining)) as response:
+            if response.status_code != 200:
+                _fail(f"http_{response.status_code}")
+            encoding = response.headers.get("Content-Encoding", "identity").strip().lower()
+            if encoding != "identity":
+                _fail("content_encoding_rejected")
+            length = response.headers.get("Content-Length")
+            if length is not None:
+                if not length.isascii() or not length.isdigit():
+                    _fail("invalid_content_length")
+                if int(length) > config.max_page_bytes:
+                    _fail("page_bytes_limit")
+            content = bytearray()
+            # Identity encoding cannot expand compressed input. Do not specify
+            # chunk_size: that buffers tiny reads before yielding to these checks.
+            async for chunk in response.aiter_bytes():
+                if time.monotonic() >= deadline:
+                    _fail("duration_limit")
+                if len(content) + len(chunk) > config.max_page_bytes:
+                    _fail("page_bytes_limit")
+                content.extend(chunk)
+            if time.monotonic() >= deadline:
+                _fail("duration_limit")
+            version = response.headers.get("OData-Version", "")
+            versions = [version] if re.fullmatch(r"[0-9]{1,2}(?:\.[0-9]{1,2}){0,2}", version) else []
+            ages = []
+            for cookie in response.headers.get_list("Set-Cookie"):
+                match = re.search(r"(?:^|;)\s*max-age=([0-9]{1,10})(?:;|$)", cookie, re.I)
+                if match:
+                    ages.append(int(match[1]))
+            return content, versions, ages
+
+
 def discover(config, *, token=None, transport=None, mode="live"):
     """Inspect configured reads; `complete` applies only to this source read.
 
     Neither complete nor incomplete discovery reports acknowledge peer agreement,
     create reconciliation snapshots, or advance any baseline.
     """
+    return asyncio.run(_discover(config, token=token, transport=transport, mode=mode))
+
+
+async def _discover(config, *, token, transport, mode):
     if mode not in ("live", "fixture"):
         _fail("invalid_mode")
     if mode == "fixture" and transport is None:
         _fail("fixture_transport_required")
     if mode == "live" and (not isinstance(token, str) or not token.strip() or len(token) > 16_384 or any(ord(c) < 33 or ord(c) > 126 for c in token)):
         _fail("credential_missing_or_invalid")
-    headers = {"Accept": "application/json", "User-Agent": "UnumDCIM-readonly-discovery/1"}
+    headers = {"Accept": "application/json", "Accept-Encoding": "identity",
+               "User-Agent": "UnumDCIM-readonly-discovery/1"}
     if mode == "live":
         headers["Authorization"] = f"{config.authorization_scheme} {token}"
     report = {"contract": "unum.discovery/1", "mode": mode, "observation_id": str(uuid4()),
@@ -286,7 +332,7 @@ def discover(config, *, token=None, transport=None, mode="live"):
               "writes_enabled": False, "baseline_advanced": False, "data_ready_for_reconciliation": False,
               "collections": []}
     deadline = time.monotonic() + config.max_duration_seconds
-    with httpx.Client(headers=headers, follow_redirects=False, trust_env=False, transport=transport) as client:
+    async with httpx.AsyncClient(headers=headers, follow_redirects=False, trust_env=False, transport=transport) as client:
         for collection in config.collections:
             result = {"name": collection.name, "complete": False, "pages_received": 0, "record_count": 0,
                       "field_types": {alias: [] for alias in collection.fields}, "odata_versions": [],
@@ -303,23 +349,9 @@ def discover(config, *, token=None, transport=None, mode="live"):
                     if url in seen_urls:
                         _fail("pagination_cycle")
                     seen_urls.add(url)
-                    with client.stream("GET", url, timeout=min(config.timeout_seconds, remaining)) as response:
-                        if response.status_code != 200:
-                            _fail(f"http_{response.status_code}")
-                        content = bytearray()
-                        for chunk in response.iter_bytes(chunk_size=65536):
-                            if time.monotonic() >= deadline:
-                                _fail("duration_limit")
-                            if len(content) + len(chunk) > config.max_page_bytes:
-                                _fail("page_bytes_limit")
-                            content.extend(chunk)
-                        version = response.headers.get("OData-Version", "")
-                        if re.fullmatch(r"[0-9]{1,2}(?:\.[0-9]{1,2}){0,2}", version):
-                            result["odata_versions"] = sorted(set(result["odata_versions"]) | {version})
-                        for cookie in response.headers.get_list("Set-Cookie"):
-                            match = re.search(r"(?:^|;)\s*max-age=([0-9]{1,10})(?:;|$)", cookie, re.I)
-                            if match:
-                                result["session_max_age_seconds"] = sorted(set(result["session_max_age_seconds"]) | {int(match[1])})
+                    content, versions, ages = await _read_page(client, url, config, deadline)
+                    result["odata_versions"] = sorted(set(result["odata_versions"]) | set(versions))
+                    result["session_max_age_seconds"] = sorted(set(result["session_max_age_seconds"]) | set(ages))
                     try:
                         document = json.loads(content, parse_float=_json_float, parse_constant=lambda _: _fail("invalid_json"))
                     except (ValueError, UnicodeError, RecursionError):
@@ -353,6 +385,8 @@ def discover(config, *, token=None, transport=None, mode="live"):
                             if value is _MISSING:
                                 _fail("mapped_field_missing")
                             types[alias].add(_kind(value))
+                    if time.monotonic() >= deadline:
+                        _fail("duration_limit")
                     result["pages_received"] += 1
                     result["record_count"] += len(items)
                     next_link = _at(document, collection.next_path)
@@ -373,6 +407,8 @@ def discover(config, *, token=None, transport=None, mode="live"):
                     _fail("page_limit")
             except DiscoveryError as exc:
                 result["error"] = str(exc)
+            except TimeoutError:
+                result["error"] = "duration_limit"
             except httpx.TimeoutException:
                 result["error"] = "request_timeout"
             except httpx.HTTPError:

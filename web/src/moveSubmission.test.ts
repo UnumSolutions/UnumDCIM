@@ -1,14 +1,19 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ApiError} from './api';
 import {createMoveSubmission, type MoveCommand} from './moveSubmission';
+import type {Change} from './types';
 
 const command:MoveCommand = {asset_id:'asset-1',rack_id:'rack-2',u:10,face:'front',site:'site-1',expected_revision:1,authority_epoch:2};
 type WireCommand = MoveCommand & {idempotency_key:string};
+function acknowledgement(payload:MoveCommand=command,id='change-1'):Change {
+  return {id,site:payload.site,proposer:'Alex',approver:'',payload:{...payload},
+    state:'awaiting_approval',error:'',revision:1,created_at:'2026-09-30T12:00:00Z'};
+}
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks()});
 
 describe('move proposal requests',()=>{
   it('retries an accepted proposal with the same key and payload after its response is lost',async()=>{
-    const proposals = new Map<string, {id:string;payload:WireCommand}>();
+    const proposals = new Map<string, Change>();
     const preview = vi.fn();
     const submitted:WireCommand[] = [];
     vi.stubGlobal('fetch',vi.fn(async(path:string,options:RequestInit)=>{
@@ -20,7 +25,7 @@ describe('move proposal requests',()=>{
       submitted.push(payload);
       const existing = proposals.get(payload.idempotency_key);
       if(existing) return Response.json(existing);
-      proposals.set(payload.idempotency_key,{id:'change-1',payload});
+      proposals.set(payload.idempotency_key,acknowledgement(payload));
       // The server has committed, but no acknowledgement reaches the client.
       throw new TypeError('Failed to fetch');
     }));
@@ -43,7 +48,7 @@ describe('move proposal requests',()=>{
       submitted.push(JSON.parse(options.body as string));
       if(submitted.length===1) throw new TypeError('Response lost after acceptance');
       if(submitted.length===2) return Response.json({error:'Retry later'},{status});
-      return Response.json({id:'original-change'});
+      return Response.json(acknowledgement(submitted[0],'original-change'));
     }));
     const submission = createMoveSubmission('operator');
     await expect(submission.submit(command)).rejects.toThrow('Response lost');
@@ -57,7 +62,7 @@ describe('move proposal requests',()=>{
     let finishPreview!:(response:Response)=>void;
     const network = vi.fn((path:string)=>path.includes('/preview')
       ?new Promise<Response>(resolve=>{finishPreview=resolve})
-      :Promise.resolve(Response.json({id:'change-1'})));
+      :Promise.resolve(Response.json(acknowledgement())));
     vi.stubGlobal('fetch',network);
     const submission = createMoveSubmission('operator');
     const first = submission.submit(command);
@@ -78,7 +83,7 @@ describe('move proposal requests',()=>{
         return Response.json({valid:true});
       }
       posted.push(JSON.parse(options.body as string));
-      return posted.length===1?Response.json({error:'Stale placement revision'},{status:409}):Response.json({id:'change-2'});
+      return posted.length===1?Response.json({error:'Stale placement revision'},{status:409}):Response.json(acknowledgement(posted[1],'change-2'));
     }));
     const submission = createMoveSubmission('operator');
     await expect(submission.submit(command)).rejects.toBeInstanceOf(ApiError);
@@ -102,5 +107,49 @@ describe('move proposal requests',()=>{
     await expect(submission.submit({...command,u:20,expected_revision:3})).rejects.toThrow('Gateway unavailable');
     expect(new Set(posted.map(payload=>payload.idempotency_key)).size).toBe(3);
     expect(posted[2].expected_revision).toBe(3);
+  });
+
+  it('retains the accepted command when its successful response body is interrupted',async()=>{
+    const proposals = new Map<string,Change>();
+    const posted:WireCommand[] = [];
+    let previews = 0;
+    vi.stubGlobal('fetch',vi.fn(async(path:string,options:RequestInit)=>{
+      if(path.includes('/preview')) {previews++;return Response.json({valid:true})}
+      const payload = JSON.parse(options.body as string) as WireCommand;
+      posted.push(payload);
+      const existing = proposals.get(payload.idempotency_key);
+      if(existing) return Response.json(existing);
+      proposals.set(payload.idempotency_key,acknowledgement(payload));
+      const body = new ReadableStream({start(controller){
+        controller.enqueue(new TextEncoder().encode('{"id":'));
+        controller.error(new TypeError('Connection closed during response body'));
+      }});
+      return new Response(body,{status:201});
+    }));
+    const submission = createMoveSubmission('operator');
+    await expect(submission.submit(command)).rejects.toThrow('Connection closed during response body');
+    const result = await submission.submit({...command,expected_revision:2,authority_epoch:3});
+    expect(result.id).toBe('change-1');
+    expect(proposals.size).toBe(1);
+    expect(posted[1]).toEqual(posted[0]);
+    expect(previews).toBe(1);
+  });
+
+  it.each([
+    ['invalid JSON',()=>new Response('<html>gateway</html>',{status:200})],
+    ['missing change fields',()=>Response.json({id:'change-1'})],
+    ['a different command',()=>Response.json(acknowledgement({...command,rack_id:'other-rack'}))],
+    ['a different site',()=>Response.json({...acknowledgement(),site:'other-site'})],
+  ])('retains the original key and payload after %s',async(_name,invalidResponse)=>{
+    const posted:WireCommand[] = [];
+    vi.stubGlobal('fetch',vi.fn(async(path:string,options:RequestInit)=>{
+      if(path.includes('/preview')) return Response.json({valid:true});
+      posted.push(JSON.parse(options.body as string));
+      return posted.length===1?invalidResponse():Response.json(acknowledgement(posted[0]));
+    }));
+    const submission = createMoveSubmission('operator');
+    await expect(submission.submit(command)).rejects.toThrow();
+    await expect(submission.submit({...command,expected_revision:2})).resolves.toMatchObject({id:'change-1'});
+    expect(posted[1]).toEqual(posted[0]);
   });
 });

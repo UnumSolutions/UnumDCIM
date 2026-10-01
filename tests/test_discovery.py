@@ -1,10 +1,13 @@
 """Exercise real httpx GET/pagination paths with controlled local responses."""
+import asyncio
 import copy
+import gzip
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import httpx
 import pytest
@@ -66,6 +69,7 @@ def test_complete_pagination_is_get_only_and_report_contains_no_credentials_or_r
     assert [request.method for request in requests] == ["GET", "GET"]
     assert all(request.content == b"" for request in requests)
     assert all(request.headers["authorization"] == "Bearer secret-credential" for request in requests)
+    assert all(request.headers["accept-encoding"] == "identity" for request in requests)
     assert str(requests[1].url).endswith("?cursor=opaque-private-cursor&limit=2")
     serialized = json.dumps(report)
     for private in ("secret-credential", "secret-cookie", "Sensitive", "synthetic-1", "opaque-private-cursor", "customer-approved-host"):
@@ -160,16 +164,112 @@ def test_pagination_cycle_is_detected_without_repeating_request():
     assert report["collections"][0]["error"] == "pagination_cycle"
 
 
-def test_duration_limit_is_enforced_during_transfer(monkeypatch):
-    now = [0]
-    monkeypatch.setattr("unum_sync.discovery.time.monotonic", lambda: now[0])
+def test_shared_duration_limit_cancels_slow_drip_and_closes_response():
+    class SlowDrip(httpx.AsyncByteStream):
+        chunks_received = 0
+        closed = False
 
-    def slow(_):
-        now[0] = 31
+        async def __aiter__(self):
+            for _ in range(1000):
+                await asyncio.sleep(.01)
+                self.chunks_received += 1
+                yield b" "
+
+        async def aclose(self):
+            self.closed = True
+
+    body = SlowDrip()
+    started = time.monotonic()
+    report = discover(config(max_duration_seconds=.1), token="private",
+                      transport=httpx.MockTransport(lambda _: httpx.Response(200, stream=body)))
+    assert time.monotonic() - started < 1.5
+    assert body.chunks_received < 1000
+    assert body.closed
+    assert report["collections"][0]["error"] == "duration_limit"
+    assert report["complete"] is False
+    assert report["collections"][0]["pages_received"] == 0
+
+
+def test_duration_limit_cancels_delayed_headers():
+    cancelled = []
+
+    async def delayed_headers(_):
+        try:
+            await asyncio.sleep(10)
+            return httpx.Response(200, json=page())
+        finally:
+            cancelled.append(True)
+
+    started = time.monotonic()
+    report = discover(config(max_duration_seconds=.1), token="private",
+                      transport=httpx.MockTransport(delayed_headers))
+    assert time.monotonic() - started < 1.5
+    assert cancelled == [True]
+    assert report["collections"][0]["error"] == "duration_limit"
+    assert report["complete"] is False
+
+
+def test_expired_budget_does_not_start_next_collection():
+    raw = config_data()
+    raw["limits"]["max_duration_seconds"] = .1
+    other = copy.deepcopy(raw["collections"][0])
+    other["name"] = "other_collection"
+    raw["collections"].append(other)
+    requested = []
+
+    async def delayed_headers(request):
+        requested.append(request)
+        await asyncio.sleep(10)
         return httpx.Response(200, json=page())
 
-    report = discover(config(), token="private", transport=httpx.MockTransport(slow))
-    assert report["collections"][0]["error"] == "duration_limit"
+    report = discover(DiscoveryConfig.from_dict(raw), token="private",
+                      transport=httpx.MockTransport(delayed_headers))
+    assert len(requested) == 1
+    assert [result["error"] for result in report["collections"]] == ["duration_limit", "duration_limit"]
+    assert report["complete"] is False
+
+
+def test_compressed_expansion_is_rejected_before_reading_body():
+    class CompressedBody(httpx.AsyncByteStream):
+        read = False
+        closed = False
+
+        async def __aiter__(self):
+            self.read = True
+            yield gzip.compress(b" " * 10_000_000)
+
+        async def aclose(self):
+            self.closed = True
+
+    body = CompressedBody()
+    report = discover(config(max_page_bytes=1000), token="private",
+                      transport=httpx.MockTransport(lambda _: httpx.Response(
+                          200, headers={"Content-Encoding": "gzip"}, stream=body)))
+    assert body.read is False
+    assert body.closed
+    assert report["collections"][0]["error"] == "content_encoding_rejected"
+    assert report["complete"] is False
+
+
+def test_uncompressed_stream_is_capped_without_content_length():
+    class OversizedBody(httpx.AsyncByteStream):
+        chunks_received = 0
+        closed = False
+
+        async def __aiter__(self):
+            for _ in range(1000):
+                self.chunks_received += 1
+                yield b" " * 500
+
+        async def aclose(self):
+            self.closed = True
+
+    body = OversizedBody()
+    report = discover(config(max_page_bytes=1000), token="private",
+                      transport=httpx.MockTransport(lambda _: httpx.Response(200, stream=body)))
+    assert body.chunks_received == 3
+    assert body.closed
+    assert report["collections"][0]["error"] == "page_bytes_limit"
     assert report["complete"] is False
 
 

@@ -9,7 +9,7 @@ replacement. The project began as documents and an offline planner.
 | --- | --- |
 | Independent services | Inventory, placement, workflow, synchronization, registry; separate processes/databases; HTTP integration tests and import-boundary check |
 | Digital twin | React/TypeScript, floor plan, elevations, three.js view, optional walkthrough, inspector, themes, reduced effects; built and browser-reviewed |
-| Controlled moves | Persisted proposals, separate-principal approval, revisions, reservations, idempotent execution, definitive expiry/re-plan states, and ambiguous-ack recovery; HTTP and frontend tests |
+| Controlled moves | Persisted proposals, separate-principal approval, revisions, reservations, idempotent execution, definitive expiry/re-plan states, interrupted-response recovery, and active queues with paginated completed history; HTTP and frontend tests |
 | Nlyte-owned moves | Staged awaiting owner confirmation; remote writes disabled; HTTP test |
 | Reconciliation | Connection IDs, validated current/historical poll provenance, mapped types, optional additions, per-field quarantine and conflict preservation; contract tests |
 | Conflict queue | Both values and baseline, authorized resolution staging; canonical inventory unchanged |
@@ -33,12 +33,19 @@ Multi-select mode, Select all and Clear. Selected cabinets show combined equipme
 and capacity. Browser checks verified four-cabinet range selection, two-cabinet
 toggle selection and selection reset when switching to Dallas.
 
-Verification on 2026-09-13: 213 backend tests and 16 subtests passed with the
-disposable PostgreSQL/NATS qualifier. The normal SQLite run also passes and
-skips the five infrastructure-only tests. All 28 frontend tests and the
+Verification on 2026-09-30: 230 backend tests and 16 subtests passed with the
+disposable PostgreSQL/NATS qualifier. The normal SQLite run skips the five
+infrastructure-only tests. All 41 frontend tests and the
 production frontend build passed. Migration drift and domain import boundaries
 were checked. Qualification writes exact infrastructure image digests and exit
 status to `.data/qualification/latest.json`; CI reruns the qualifier.
+
+The September 30 regression checks cover interrupted successful response bodies
+without changing proposal retry keys, bounded browser requests, independent
+service refresh results, unfinished work remaining visible beyond 100 completed
+changes, scoped history traversal, and discovery cancellation/compressed-response
+rejection. Discovery's network deadline does not preempt synchronous parsing or
+OS resolver cleanup; see the pilot guide for the precise limit.
 
 The infrastructure tests exercise restricted per-module database roles, raw SQL
 tenant isolation, competing U reservations, duplicate reservation/execution,

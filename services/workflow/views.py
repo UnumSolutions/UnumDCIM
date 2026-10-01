@@ -1,7 +1,11 @@
 import hashlib
 import json
+import uuid
+from django.core import signing
 from django.db import transaction
+from django.db.models import Q
 from django.http import JsonResponse
+from django.utils.dateparse import parse_datetime
 from platform_core.api import Problem, emit, endpoint, remote, site_allowed, tenant
 from .models import Change
 
@@ -12,11 +16,51 @@ def serialize(c):
             "created_at": c.created_at.isoformat(), "updated_at": c.updated_at.isoformat()}
 
 
+def change_list(request):
+    """Keep unfinished work visible independently of the completed history page."""
+    try:
+        limit = int(request.GET.get("history_limit", "50"))
+    except ValueError:
+        raise Problem("History limit must be an integer between 1 and 100")
+    if not 1 <= limit <= 100:
+        raise Problem("History limit must be an integer between 1 and 100")
+    rows = Change.objects.filter(tenant=tenant(request), site__in=request.identity["sites"])
+    history = rows.filter(state="completed")
+    scope = hashlib.sha256(json.dumps({"tenant": tenant(request), "sites": request.identity["sites"]},
+                                      sort_keys=True).encode()).hexdigest()
+    cursor = request.GET.get("history_cursor")
+    if cursor is not None:
+        try:
+            if not cursor or len(cursor) > 2048:
+                raise ValueError()
+            position = signing.loads(cursor, salt="workflow.completed-history")
+            if position["scope"] != scope:
+                raise ValueError()
+            created_at = parse_datetime(position["created_at"])
+            row_id = uuid.UUID(position["id"])
+            if created_at is None or created_at.tzinfo is None:
+                raise ValueError()
+        except (signing.BadSignature, ValueError, TypeError, KeyError):
+            raise Problem("Invalid history cursor; restart completed history")
+        history = history.filter(Q(created_at__lt=created_at) | Q(created_at=created_at, id__lt=row_id))
+    completed = list(history.order_by("-created_at", "-id")[:limit + 1])
+    has_more = len(completed) > limit
+    completed = completed[:limit]
+    next_cursor = None
+    if has_more:
+        last = completed[-1]
+        next_cursor = signing.dumps({"scope": scope, "created_at": last.created_at.isoformat(),
+                                     "id": str(last.id)}, salt="workflow.completed-history")
+    active = list(rows.exclude(state="completed").order_by("-created_at", "-id"))
+    return JsonResponse({"contract": "unum.changes/1", "items": [serialize(c) for c in active + completed],
+                         "active_count": len(active),
+                         "history": {"limit": limit, "next_cursor": next_cursor, "has_more": has_more}})
+
+
 @endpoint(("GET", "POST"))
 def changes(request):
     if request.method == "GET":
-        return JsonResponse({"contract": "unum.changes/1", "items": [serialize(c) for c in
-            Change.objects.filter(tenant=tenant(request), site__in=request.identity["sites"]).order_by("-created_at")[:100]]})
+        return change_list(request)
     if request.identity["role"] not in ("operator", "admin"):
         raise Problem("Permission denied", 403)
     d = request.data
@@ -46,6 +90,14 @@ def changes(request):
         if created:
             emit(c.tenant, c.site, "change.proposed", c.id, c.revision, c.proposer, {"request_id": str(c.id), "state": c.state})
     return JsonResponse(serialize(c), status=201 if created else 200)
+
+
+@endpoint()
+def change(request, change_id):
+    c = Change.objects.filter(pk=change_id, tenant=tenant(request), site__in=request.identity["sites"]).first()
+    if not c:
+        raise Problem("Change not found", 404)
+    return JsonResponse(serialize(c))
 
 
 @endpoint(("POST",), roles=("approver", "admin"))

@@ -13,6 +13,23 @@ type PendingMove = {
   inFlight:Promise<Change>|null;
 };
 
+function acknowledgesCommand(value:unknown,command:MoveCommand):value is Change {
+  if(!value || typeof value!=='object') return false;
+  const change = value as Partial<Change>;
+  const payload = change.payload;
+  return typeof change.id==='string' && !!change.id.trim()
+    && change.site===command.site
+    && typeof change.proposer==='string' && !!change.proposer.trim()
+    && typeof change.approver==='string' && typeof change.error==='string'
+    && typeof change.state==='string' && !!change.state.trim()
+    && Number.isInteger(change.revision) && (change.revision??0)>0
+    && typeof change.created_at==='string' && Number.isFinite(Date.parse(change.created_at))
+    && !!payload && typeof payload==='object'
+    && payload.asset_id===command.asset_id && payload.rack_id===command.rack_id
+    && payload.u===command.u && payload.face===command.face
+    && payload.expected_revision===command.expected_revision && payload.authority_epoch===command.authority_epoch;
+}
+
 /** Preserve an ambiguous command verbatim, including revision, until acknowledged. */
 export function createMoveSubmission(role:string) {
   let pending:PendingMove|null = null;
@@ -38,7 +55,10 @@ export function createMoveSubmission(role:string) {
             await api('placement','preview',role,attempt.command);
           }
           attempt.sent = true;
-          const result = await api<Change>('workflow','changes',role,attempt.command);
+          const result = await api<unknown>('workflow','changes',role,attempt.command);
+          if(!acknowledgesCommand(result,attempt.command)) {
+            throw new Error('Move acknowledgement was incomplete or did not match. Retry to confirm the original proposal.');
+          }
           pending = null;
           return result;
         } catch(error) {

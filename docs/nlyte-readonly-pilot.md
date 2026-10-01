@@ -6,6 +6,14 @@ scheme, and JSON fields are **synthetic placeholders**, not vendor API claims.
 This work does not complete [D32](decisions/01-addendum-a.md#d32-nlyte-api-validation-gate-phase-0-exit-criterion)
 or the [target-instance discovery checklist](nlyte-discovery-checklist.md).
 
+The selected target is the latest Nlyte release. As of 2026-09-30, the newest
+release identified in Nlyte's public announcements is
+[16.0.300, published February 26, 2026](https://www.nlyte.com/news/nlyte-16-0-300-release-enhancements-integrations-and-fixes/).
+Treat this as the public planning baseline, not proof of the latest patch
+available through customer support. Confirm the actual licensed build and its
+API documentation before configuring a target. The announcement does not supply
+the endpoint contract needed to replace the synthetic route examples.
+
 The harness sends GET requests only. It never imports records, invokes workflows,
 changes field ownership, writes to Nlyte, creates reconciliation snapshots, or
 advances a baseline. The existing placement UI continues to show synthetic data.
@@ -43,7 +51,18 @@ all placeholders with evidence from that specific instance:
   `terminal_flag`, requiring false on pages with a next link and true on the
   terminal page. Choose the rule only after testing the target's semantics.
 
-Limits cap page bytes, records, pages, request timeouts, and total run duration.
+Limits cap page bytes, records, pages, and request timeouts. A shared duration
+budget cancels asynchronous network waits, including connection setup, response
+headers, and slow body transfers; subsequent collections cannot start after the
+budget expires. Parsing also checks the deadline before accepting each page.
+This is not a hard process termination deadline: synchronous parsing and OS DNS
+resolver cleanup may finish after cancellation. Use an external process deadline
+when the operator requires a strict wall-clock cutoff.
+
+Requests advertise `Accept-Encoding: identity`. Compressed responses are rejected
+before their bodies are read, so automatic decompression cannot allocate beyond
+the configured page limit. A target that always compresses responses needs an
+explicitly reviewed bounded-decompression adapter; discovery fails closed.
 A returned page larger than the requested size is a failure, even if the server
 ignores its page-size parameter. Requests run serially. HTTP is accepted only for
 explicitly enabled loopback testing (`allow_http_loopback: true`). Environment

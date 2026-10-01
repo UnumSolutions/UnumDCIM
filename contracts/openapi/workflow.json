@@ -21,7 +21,59 @@
         "operationId": "workflow_get__changes",
         "responses": {
           "200": {
-            "description": "Successful result"
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "contract",
+                    "items",
+                    "active_count",
+                    "history"
+                  ],
+                  "properties": {
+                    "contract": {
+                      "const": "unum.changes/1"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Change"
+                      }
+                    },
+                    "active_count": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "history": {
+                      "type": "object",
+                      "required": [
+                        "limit",
+                        "next_cursor",
+                        "has_more"
+                      ],
+                      "properties": {
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100
+                        },
+                        "next_cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "has_more": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid input"
@@ -38,7 +90,29 @@
           "503": {
             "description": "Dependency temporarily unavailable"
           }
-        }
+        },
+        "description": "Returns every unfinished change followed by one page of completed history, scoped to the authenticated tenant and sites. Completed history is ordered by creation time and ID, newest first. Follow history.next_cursor to retrieve older completed records without hiding unfinished work. Omit history_cursor to restart history; a cursor is bound to the tenant and site grants that produced it.",
+        "parameters": [
+          {
+            "name": "history_limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "history_cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "description": "Opaque cursor from history.next_cursor. Omit on the first page."
+          }
+        ]
       },
       "post": {
         "operationId": "workflow_post__changes",
@@ -75,6 +149,52 @@
             }
           }
         }
+      }
+    },
+    "/changes/{change_id}": {
+      "get": {
+        "operationId": "workflow_get__changes_change_id",
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Change"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Revision, ownership, occupancy or workflow conflict"
+          },
+          "503": {
+            "description": "Dependency temporarily unavailable"
+          },
+          "404": {
+            "description": "Change not found within the authenticated tenant and sites"
+          }
+        },
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Returns one change visible to the authenticated tenant and site grants, including records outside the current completed-history page."
       }
     },
     "/changes/{change_id}/approve": {
@@ -250,6 +370,57 @@
           "replan_required",
           "completed"
         ]
+      },
+      "Change": {
+        "type": "object",
+        "required": [
+          "id",
+          "site",
+          "proposer",
+          "approver",
+          "payload",
+          "state",
+          "error",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "site": {
+            "type": "string"
+          },
+          "proposer": {
+            "type": "string"
+          },
+          "approver": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ChangeState"
+          },
+          "error": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     }
   }

@@ -10,7 +10,7 @@ move={'type':'object','additionalProperties':False,'required':['asset_id','rack_
 contracts={
 'inventory':{'/assets':['get'],'/assets/{asset_id}':['get','patch']},
 'placement':{'/scene':['get'],'/preview':['post'],'/reservations':['post'],'/reservations/{request_id}/commit':['post']},
-'workflow':{'/changes':['get','post'],'/changes/{change_id}/approve':['post'],'/changes/{change_id}/execute':['post']},
+'workflow':{'/changes':['get','post'],'/changes/{change_id}':['get'],'/changes/{change_id}/approve':['post'],'/changes/{change_id}/execute':['post']},
 'synchronization':{'/status':['get'],'/rehearsal':['post'],'/conflicts/{conflict_id}/resolve':['post']},
 'registry':{'/modules':['get'],'/preflight':['post']}}
 for service,paths in contracts.items():
@@ -38,6 +38,23 @@ for service,paths in contracts.items():
         operation['responses']['409']['description'] = 'Terminal rejection with code reservation_expired or reservation_invalid; create a newly approved plan with a new request ID.'
     if service == 'workflow':
         doc['components']['schemas']['ChangeState'] = {'type': 'string', 'enum': ['awaiting_approval', 'awaiting_nlyte', 'approved', 'executing', 'replan_required', 'completed']}
+        doc['components']['schemas']['Change'] = {'type': 'object', 'required': ['id', 'site', 'proposer', 'approver', 'payload', 'state', 'error', 'revision', 'created_at', 'updated_at'], 'properties': {
+            'id': {'type': 'string', 'format': 'uuid'}, 'site': string, 'proposer': string, 'approver': string,
+            'payload': {'type': 'object'}, 'state': {'$ref': '#/components/schemas/ChangeState'}, 'error': string,
+            'revision': {'type': 'integer', 'minimum': 1}, 'created_at': {'type': 'string', 'format': 'date-time'}, 'updated_at': {'type': 'string', 'format': 'date-time'}}}
+        operation = doc['paths']['/changes']['get']
+        operation['description'] = 'Returns every unfinished change followed by one page of completed history, scoped to the authenticated tenant and sites. Completed history is ordered by creation time and ID, newest first. Follow history.next_cursor to retrieve older completed records without hiding unfinished work. Omit history_cursor to restart history; a cursor is bound to the tenant and site grants that produced it.'
+        operation['parameters'] = [
+            {'name': 'history_limit', 'in': 'query', 'schema': {'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 50}},
+            {'name': 'history_cursor', 'in': 'query', 'schema': {'type': 'string', 'maxLength': 2048}, 'description': 'Opaque cursor from history.next_cursor. Omit on the first page.'}]
+        operation['responses']['200']['content'] = {'application/json': {'schema': {'type': 'object', 'required': ['contract', 'items', 'active_count', 'history'], 'properties': {
+            'contract': {'const': 'unum.changes/1'}, 'items': {'type': 'array', 'items': {'$ref': '#/components/schemas/Change'}},
+            'active_count': {'type': 'integer', 'minimum': 0}, 'history': {'type': 'object', 'required': ['limit', 'next_cursor', 'has_more'], 'properties': {
+                'limit': {'type': 'integer', 'minimum': 1, 'maximum': 100}, 'next_cursor': {'type': ['string', 'null']}, 'has_more': {'type': 'boolean'}}}}}}}
+        operation = doc['paths']['/changes/{change_id}']['get']
+        operation['description'] = 'Returns one change visible to the authenticated tenant and site grants, including records outside the current completed-history page.'
+        operation['responses']['200']['content'] = {'application/json': {'schema': {'$ref': '#/components/schemas/Change'}}}
+        operation['responses']['404'] = {'description': 'Change not found within the authenticated tenant and sites'}
         operation = doc['paths']['/changes/{change_id}/execute']['post']
         operation['description'] = 'Executes or resumes one approved move with a stable reservation ID. Transient dependency failures retain executing; retry the same change ID. Definitive reservation expiry or plan rejection transitions to terminal replan_required. Refresh placement, submit a new proposal with a new idempotency key and obtain a separate approval. Completed retries return the recorded result without moving twice.'
         operation['responses']['409']['description'] = 'Definitive plan rejection may return the change in replan_required. Repeated execution of that terminal change returns code replan_required.'
