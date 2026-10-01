@@ -1,5 +1,6 @@
 import {api, ApiError} from './api';
 import type {Change, Ghost} from './types';
+import type {AuthSession} from './authSession';
 
 export type MoveCommand = Ghost & {
   site:string;
@@ -31,8 +32,9 @@ function acknowledgesCommand(value:unknown,command:MoveCommand):value is Change 
 }
 
 /** Preserve an ambiguous command verbatim, including revision, until acknowledged. */
-export function createMoveSubmission(role:string) {
+export function createMoveSubmission(session:AuthSession) {
   let pending:PendingMove|null = null;
+  session.signal.addEventListener('abort',()=>{pending=null},{once:true});
   return {
     reset:()=>{if(!pending?.inFlight) pending = null},
     submit(command:MoveCommand):Promise<Change> {
@@ -52,10 +54,10 @@ export function createMoveSubmission(role:string) {
           // After an ambiguous POST, retry it directly. Previewing again could
           // fail because the accepted proposal has since moved the asset.
           if(!attempt.sent) {
-            await api('placement','preview',role,attempt.command);
+            await api('placement','preview',session,attempt.command);
           }
           attempt.sent = true;
-          const result = await api<unknown>('workflow','changes',role,attempt.command);
+          const result = await api<unknown>('workflow','changes',session,attempt.command);
           if(!acknowledgesCommand(result,attempt.command)) {
             throw new Error('Move acknowledgement was incomplete or did not match. Retry to confirm the original proposal.');
           }

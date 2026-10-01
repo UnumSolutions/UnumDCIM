@@ -13,12 +13,12 @@ replacement. The project began as documents and an offline planner.
 | Nlyte-owned moves | Staged awaiting owner confirmation; remote writes disabled; HTTP test |
 | Reconciliation | Connection IDs, validated current/historical poll provenance, mapped types, optional additions, per-field quarantine and conflict preservation; contract tests |
 | Conflict queue | Both values and baseline, authorized resolution staging; canonical inventory unchanged |
-| Authentication | RS256 OIDC API access-token verification, required MFA assurance, verified service/caller delegation and intersected site grants; synthetic identity switching remains demo-only |
+| Authentication | RS256 OIDC API verification, required MFA assurance, service/caller delegation and site grants; Google Workspace broker policy, browser PKCE sign-in, memory-only tokens and verified identity isolation; customer Google login remains unverified |
 | Database isolation | FORCE RLS on all 14 tenant tables, restricted runtime-role checks, explicit tenant context, audit append-only trigger, and tenant-scoped workers; real PostgreSQL tests |
 | Audit/outbox | Local hash chains, transactional outbox, verifier, bounded NATS publisher and transactional duplicate suppression; real JetStream outage, restart, lost-ack and replay tests |
 | Compatibility | Manifests and contract/test-matrix preflight; signature verification cannot be self-attested through API |
 | Offline policy | Signed 72-hour grant primitives, scope, epoch, expiry and revocation tests; not wired to API authentication |
-| Deployment | Five module image builds/smoke tests, Helm lint/render and invalid-config rejection; Linux host placement/Quadlet templates; actual cluster/host deployment remains unverified |
+| Deployment | Five module image builds/smoke tests, Helm lint/render and invalid-config rejection; Linux host placement/Quadlet templates; production web image passes read-only/unprivileged TLS gateway smoke; actual cluster/host deployment remains unverified |
 | Read-only discovery | Explicit configured routes and JSON mappings, bounded GET-only pagination, secret-free aggregate reports and sanitized fixture replay; no target Nlyte compatibility claim |
 
 Registry entries marked `planned` are not installed services. Synthetic overlays
@@ -33,9 +33,9 @@ Multi-select mode, Select all and Clear. Selected cabinets show combined equipme
 and capacity. Browser checks verified four-cabinet range selection, two-cabinet
 toggle selection and selection reset when switching to Dallas.
 
-Verification on 2026-09-30: 230 backend tests and 16 subtests passed with the
+Verification on 2026-09-30: 269 backend/configuration tests and 16 subtests passed with the
 disposable PostgreSQL/NATS qualifier. The normal SQLite run skips the five
-infrastructure-only tests. All 41 frontend tests and the
+infrastructure-only tests. All 62 frontend tests and the
 production frontend build passed. Migration drift and domain import boundaries
 were checked. Qualification writes exact infrastructure image digests and exit
 status to `.data/qualification/latest.json`; CI reruns the qualifier.
@@ -46,6 +46,15 @@ service refresh results, unfinished work remaining visible beyond 100 completed
 changes, scoped history traversal, and discovery cancellation/compressed-response
 rejection. Discovery's network deadline does not preempt synchronous parsing or
 OS resolver cleanup; see the pilot guide for the precise limit.
+
+The Google Workspace integration adds a pinned Keycloak realm generator and a
+disposable protocol qualification. Its synthetic upstream verifies mandatory
+broker OTP, signed API claims, administrator-assigned grants, denied escalation,
+PKCE rejection and repeat-login MFA. It does not test a real Google account or
+browser TLS. The gateway's separate offline container test verifies HTTPS
+upstream certificate/hostname checking, bearer forwarding, removal of demo and
+delegation headers, callback routing and configuration isolation. Frontend tests
+cover logout, expiry, renewal races and identity changes clearing application data.
 
 The infrastructure tests exercise restricted per-module database roles, raw SQL
 tenant isolation, competing U reservations, duplicate reservation/execution,
@@ -73,8 +82,8 @@ recorded design requirements, not inspection of the customer's Nlyte screens.
 1. **Nlyte discovery:** version, licensed API, reads/writes, auth, paging, rates,
    concurrency, workflows, custom fields, reports, screenshots and ServiceNow
    dependencies. Map every required behavior to acceptance evidence.
-2. **Security:** customer IdP/JWKS/claim configuration and MFA assurance acceptance,
-   browser login/session integration, full field policy, tenant-key management,
+2. **Security:** customer Google Workspace/OAuth and HTTPS deployment configuration,
+   real browser/MFA/session acceptance, full field policy, tenant-key management,
    privileged access procedures and retention anchoring. API token validation,
    runtime-role checks, FORCE RLS and audit triggers are implemented; an owner or
    superuser can still change schema/grants. See the authentication guide.

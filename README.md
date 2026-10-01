@@ -45,8 +45,10 @@ It removes its containers and databases when finished. Evidence is written to
 The API supports signed OIDC access tokens with MFA claims, verified caller
 delegation, and PostgreSQL FORCE row-level security. See
 [authentication and tenant enforcement](docs/security-authentication.md).
-The browser identity selector remains a local demo facility. A customer identity
-provider and target Nlyte instance must be qualified before a real pilot.
+The browser identity selector remains a local demo facility. For staff sign-in,
+see the [Google Workspace broker integration](docs/google-workspace.md) and
+[production browser gateway](deploy/web/README.md). A customer identity provider
+and target Nlyte instance must be qualified before a real pilot.
 
 See [coverage and remaining gates](docs/implementation-status.md),
 [the twin design review](docs/design/twin-review.md), and

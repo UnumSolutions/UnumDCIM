@@ -122,6 +122,13 @@ def ready(request):
 
 
 @endpoint()
+def identity(request):
+    response = JsonResponse({key: request.identity[key] for key in ("actor", "tenant", "sites", "role")})
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@endpoint()
 def openapi(request):
     path = settings.BASE_DIR / "contracts" / "openapi" / (settings.SERVICE + ".json")
     return JsonResponse(json.loads(path.read_text()))

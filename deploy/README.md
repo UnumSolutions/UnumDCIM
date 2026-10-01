@@ -35,6 +35,12 @@ is not a qualified production artifact.
 
 ## Production identity and database configuration
 
+For Google Workspace staff authentication, start with
+[the broker guide](../docs/google-workspace.md) and deploy the
+[production browser gateway](web/README.md). The gateway serves runtime OIDC
+configuration and forwards browser bearer tokens; it never supplies demo or
+machine credentials to production requests.
+
 Human API requests require RS256 OIDC access tokens with the configured issuer,
 audience, expiry, API scope and tenant/site/role claims. MFA must be represented
 by `amr` containing `mfa`, or by an explicitly accepted `acr` value. Configure the

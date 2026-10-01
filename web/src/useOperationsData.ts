@@ -1,8 +1,9 @@
 import {useEffect, useMemo, useSyncExternalStore} from 'react';
 import {createOperationsData} from './operationsData';
+import type {AuthSession} from './authSession';
 
-export function useOperationsData(role:string) {
-  const store = useMemo(()=>createOperationsData(role),[role]);
+export function useOperationsData(session:AuthSession) {
+  const store = useMemo(()=>createOperationsData(session),[session]);
   const data = useSyncExternalStore(store.subscribe,store.getSnapshot,store.getSnapshot);
   useEffect(()=>{
     let active = true;

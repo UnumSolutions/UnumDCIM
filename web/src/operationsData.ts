@@ -1,6 +1,7 @@
 import {api} from './api';
 import {contractCompatible} from './domain';
 import type {Asset, Change, Scene, SyncState} from './types';
+import type {AuthSession} from './authSession';
 
 export type ModuleItem = {id:string;status:string;version:string};
 type Service = 'placement' | 'inventory' | 'workflow' | 'synchronization' | 'registry';
@@ -36,7 +37,7 @@ function initialData():OperationsData {
 }
 
 /** One identity's data. Services publish independently within the latest refresh. */
-export function createOperationsData(role:string) {
+export function createOperationsData(session:AuthSession) {
   let snapshot = initialData();
   let generation = 0;
   let controller:AbortController|null = null;
@@ -47,7 +48,14 @@ export function createOperationsData(role:string) {
     snapshot = next;
     listeners.forEach(listener=>listener());
   };
+  const invalidate = ()=>{
+    generation += 1;controller?.abort();controller=null;
+    historyCursors=[null];historyPage=0;
+    publish(initialData());
+  };
+  session.signal.addEventListener('abort',invalidate,{once:true});
   const refresh = async()=>{
+    if(session.signal.aborted) return;
     const requestGeneration = ++generation;
     controller?.abort();
     const requestController = new AbortController();
@@ -76,20 +84,20 @@ export function createOperationsData(role:string) {
     };
     await Promise.all([
       update('placement',async()=>{
-        const scene = await api<Scene>('placement','scene',role,undefined,options);
+        const scene = await api<Scene>('placement','scene',session,undefined,options);
         if(!contractCompatible(scene.contract,'unum.scene/1')) throw new Error('Incompatible placement contract');
         return {scene};
       }),
-      update('inventory',async()=>({assets:(await api<{items:Asset[]}>('inventory','assets',role,undefined,options)).items})),
+      update('inventory',async()=>({assets:(await api<{items:Asset[]}>('inventory','assets',session,undefined,options)).items})),
       update('workflow',async()=>{
         const path = historyCursor?`changes?history_cursor=${encodeURIComponent(historyCursor)}`:'changes';
-        const changes = await api<ChangesResponse>('workflow',path,role,undefined,options);
+        const changes = await api<ChangesResponse>('workflow',path,session,undefined,options);
         return {changes:changes.items,changeHistory:{page:requestedPage+1,
           nextCursor:changes.history.next_cursor,hasMore:changes.history.has_more,
         }};
       }),
-      update('synchronization',async()=>({sync:await api<SyncState>('synchronization','status',role,undefined,options)})),
-      update('registry',async()=>({modules:(await api<{items:ModuleItem[]}>('registry','modules',role,undefined,options)).items})),
+      update('synchronization',async()=>({sync:await api<SyncState>('synchronization','status',session,undefined,options)})),
+      update('registry',async()=>({modules:(await api<{items:ModuleItem[]}>('registry','modules',session,undefined,options)).items})),
     ]);
     if(controller===requestController) controller = null;
   };
@@ -100,7 +108,7 @@ export function createOperationsData(role:string) {
       return ()=>{listeners.delete(listener)};
     },
     // Invalidates pending requests during identity changes and effect cleanup.
-    invalidate:()=>{generation += 1;controller?.abort();controller=null},
+    invalidate,
     refresh,
     olderChanges:async()=>{
       if(snapshot.status.workflow.loading || !snapshot.changeHistory.hasMore || !snapshot.changeHistory.nextCursor) return;

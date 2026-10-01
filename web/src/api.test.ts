@@ -1,3 +1,4 @@
+import {createDemoSession} from './authSession';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {api} from './api';
 
@@ -11,8 +12,8 @@ describe('bounded API requests',()=>{
       signal = options.signal!;
       return new Promise<Response>(()=>{});
     }));
-    const request = api('registry','modules','operator',undefined,{timeoutMs:100});
-    const rejected = expect(request).rejects.toThrow('registry request timed out');
+    const request = api('registry','modules',createDemoSession('operator'),undefined,{timeoutMs:100});
+    const rejected = expect(request).rejects.toThrow('Request timed out');
     await vi.advanceTimersByTimeAsync(100);
     await rejected;
     expect(signal.aborted).toBe(true);
@@ -27,8 +28,8 @@ describe('bounded API requests',()=>{
         controller.enqueue(new TextEncoder().encode('{"id":'));
       }}),{status:201});
     }));
-    const request = api('workflow','changes','operator',{}, {timeoutMs:100});
-    const rejected = expect(request).rejects.toThrow('workflow request timed out');
+    const request = api('workflow','changes',createDemoSession('operator'),{}, {timeoutMs:100});
+    const rejected = expect(request).rejects.toThrow('Request timed out');
     await vi.advanceTimersByTimeAsync(100);
     await rejected;
     expect(signal.aborted).toBe(true);
@@ -41,7 +42,7 @@ describe('bounded API requests',()=>{
       transportSignal = options.signal!;
       return new Promise<Response>(()=>{});
     }));
-    const request = api('placement','scene','operator',undefined,{signal:controller.signal});
+    const request = api('placement','scene',createDemoSession('operator'),undefined,{signal:controller.signal});
     const rejected = expect(request).rejects.toMatchObject({name:'AbortError'});
     controller.abort();
     await rejected;

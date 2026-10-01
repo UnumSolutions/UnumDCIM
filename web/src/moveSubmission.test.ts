@@ -1,3 +1,4 @@
+import {createDemoSession} from './authSession';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ApiError} from './api';
 import {createMoveSubmission, type MoveCommand} from './moveSubmission';
@@ -29,7 +30,7 @@ describe('move proposal requests',()=>{
       // The server has committed, but no acknowledgement reaches the client.
       throw new TypeError('Failed to fetch');
     }));
-    const submission = createMoveSubmission('operator');
+    const submission = createMoveSubmission(createDemoSession('operator'));
     await expect(submission.submit(command)).rejects.toThrow('Failed to fetch');
     // A background refresh changed both preconditions while the response was lost.
     const recovered = await submission.submit({...command,expected_revision:2,authority_epoch:3});
@@ -50,7 +51,7 @@ describe('move proposal requests',()=>{
       if(submitted.length===2) return Response.json({error:'Retry later'},{status});
       return Response.json(acknowledgement(submitted[0],'original-change'));
     }));
-    const submission = createMoveSubmission('operator');
+    const submission = createMoveSubmission(createDemoSession('operator'));
     await expect(submission.submit(command)).rejects.toThrow('Response lost');
     await expect(submission.submit(command)).rejects.toThrow('Retry later');
     await submission.submit({...command,expected_revision:3});
@@ -64,7 +65,7 @@ describe('move proposal requests',()=>{
       ?new Promise<Response>(resolve=>{finishPreview=resolve})
       :Promise.resolve(Response.json(acknowledgement())));
     vi.stubGlobal('fetch',network);
-    const submission = createMoveSubmission('operator');
+    const submission = createMoveSubmission(createDemoSession('operator'));
     const first = submission.submit(command);
     const second = submission.submit(command);
     expect(second).toBe(first);
@@ -85,7 +86,7 @@ describe('move proposal requests',()=>{
       posted.push(JSON.parse(options.body as string));
       return posted.length===1?Response.json({error:'Stale placement revision'},{status:409}):Response.json(acknowledgement(posted[1],'change-2'));
     }));
-    const submission = createMoveSubmission('operator');
+    const submission = createMoveSubmission(createDemoSession('operator'));
     await expect(submission.submit(command)).rejects.toBeInstanceOf(ApiError);
     await submission.submit({...command,expected_revision:2});
     expect(posted[1].idempotency_key).not.toBe(posted[0].idempotency_key);
@@ -100,7 +101,7 @@ describe('move proposal requests',()=>{
       posted.push(JSON.parse(options.body as string));
       return Response.json({error:'Gateway unavailable'},{status:502});
     }));
-    const submission = createMoveSubmission('operator');
+    const submission = createMoveSubmission(createDemoSession('operator'));
     await expect(submission.submit(command)).rejects.toThrow('Gateway unavailable');
     await expect(submission.submit({...command,u:20})).rejects.toThrow('Gateway unavailable');
     submission.reset();
@@ -126,7 +127,7 @@ describe('move proposal requests',()=>{
       }});
       return new Response(body,{status:201});
     }));
-    const submission = createMoveSubmission('operator');
+    const submission = createMoveSubmission(createDemoSession('operator'));
     await expect(submission.submit(command)).rejects.toThrow('Connection closed during response body');
     const result = await submission.submit({...command,expected_revision:2,authority_epoch:3});
     expect(result.id).toBe('change-1');
@@ -147,7 +148,7 @@ describe('move proposal requests',()=>{
       posted.push(JSON.parse(options.body as string));
       return posted.length===1?invalidResponse():Response.json(acknowledgement(posted[0]));
     }));
-    const submission = createMoveSubmission('operator');
+    const submission = createMoveSubmission(createDemoSession('operator'));
     await expect(submission.submit(command)).rejects.toThrow();
     await expect(submission.submit({...command,expected_revision:2})).resolves.toMatchObject({id:'change-1'});
     expect(posted[1]).toEqual(posted[0]);

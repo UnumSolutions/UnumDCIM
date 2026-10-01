@@ -31,6 +31,18 @@ def test_auth_and_tenant_isolation(cluster):
     assert len(call(cluster,"inventory","assets").json()["items"])==128
 
 
+@pytest.mark.parametrize("service", SERVICES)
+def test_identity_is_verified_scoped_and_not_cached(cluster, service):
+    url = cluster[0][service] + "/api/v1/identity"
+    assert httpx.get(url).status_code == 401
+    response = call(cluster, service, "identity", role="ashburn")
+    assert response.status_code == 200
+    assert response.json() == {"actor": "site-operator", "tenant": "demo", "sites": ["ashburn"], "role": "operator"}
+    assert response.headers["cache-control"] == "no-store"
+    response = httpx.get(url, headers={"Authorization": "Bearer demo-other-tenant", "X-Unum-Tenant": "demo", "X-Unum-Role": "operator"})
+    assert response.json() == {"actor": "outsider", "tenant": "other", "sites": ["ashburn", "dallas"], "role": "admin"}
+
+
 def test_location_scope_and_cross_site_moves(cluster):
     scene=call(cluster,"placement","scene").json()
     assert {r["site"] for r in scene["rooms"]}=={"ashburn","dallas"}

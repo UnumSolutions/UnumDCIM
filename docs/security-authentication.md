@@ -35,10 +35,13 @@ subject, so renaming a login cannot bypass separate-principal approval.
 
 Use `Authorization: Bearer <access-token>` over trusted TLS. Unknown signing keys
 are resolved from the configured JWKS URI; token-supplied key URLs are ignored.
-Provider failures never permit unverified tokens. Browser login/session handling
-is not supplied by the synthetic development gateway. Integrating the customer's
-login flow, logout/revocation policy, and IdP assurance mapping remains a pilot
-acceptance task.
+Provider failures never permit unverified tokens. The production browser supports
+Google Workspace through a self-hosted OIDC broker with mandatory step-up MFA;
+see [the configuration and qualification guide](google-workspace.md). It uses
+authorization code with PKCE, keeps tokens in memory, and obtains its effective
+identity from the authenticated `/api/v1/identity` endpoint. The development
+gateway remains a separate, explicitly synthetic mode. Customer Google OAuth,
+TLS, logout/revocation policy, and assurance acceptance remain pilot gates.
 
 ## Service delegation
 

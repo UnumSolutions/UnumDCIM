@@ -1,3 +1,4 @@
+import {createDemoSession} from './authSession';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {createOperationsData} from './operationsData';
 import {API_TIMEOUT_MS} from './api';
@@ -40,7 +41,7 @@ describe('operations refresh requests',()=>{
   it('does not let a delayed earlier batch replace a newer placement or freshness result',async()=>{
     const requests = controlledNetwork();
     const clock = vi.spyOn(Date,'now').mockReturnValue(1000);
-    const store = createOperationsData('operator');
+    const store = createOperationsData(createDemoSession('operator'));
     const older = store.refresh();
     const newer = store.refresh();
     expect(requests.slice(0,5).every(request=>request.signal.aborted)).toBe(true);
@@ -57,7 +58,7 @@ describe('operations refresh requests',()=>{
 
   it('retains a newer failure when an older successful request finally arrives',async()=>{
     const requests = controlledNetwork();
-    const store = createOperationsData('operator');
+    const store = createOperationsData(createDemoSession('operator'));
     const initial = store.refresh();
     finish(requests,1);
     await initial;
@@ -76,7 +77,7 @@ describe('operations refresh requests',()=>{
   it('tracks service failures and recovery independently without clearing retained data',async()=>{
     const requests = controlledNetwork();
     const clock = vi.spyOn(Date,'now').mockReturnValue(1000);
-    const store = createOperationsData('operator');
+    const store = createOperationsData(createDemoSession('operator'));
     const initial = store.refresh();
     finish(requests,1);
     await initial;
@@ -97,7 +98,7 @@ describe('operations refresh requests',()=>{
 
   it('rejects incompatible scene contracts without marking placement fresh',async()=>{
     const requests = controlledNetwork();
-    const store = createOperationsData('operator');
+    const store = createOperationsData(createDemoSession('operator'));
     const refresh = store.refresh();
     requests[0].resolve(Response.json({...scene(1),contract:'unum.scene/2'}));
     finish(requests.slice(1),1);
@@ -110,12 +111,12 @@ describe('operations refresh requests',()=>{
 
   it('invalidates in-flight updates on cleanup and gives a new identity an empty snapshot',async()=>{
     const requests = controlledNetwork();
-    const operator = createOperationsData('operator');
+    const operator = createOperationsData(createDemoSession('operator'));
     const refresh = operator.refresh();
     operator.invalidate();
     expect(requests.every(request=>request.signal.aborted)).toBe(true);
     await refresh;
-    const approver = createOperationsData('approver');
+    const approver = createOperationsData(createDemoSession('approver'));
     expect(approver.getSnapshot().scene).toBeNull();
     const approverRefresh = approver.refresh();
     expect(requests.slice(5).every(request=>request.role==='approver')).toBe(true);
@@ -135,7 +136,7 @@ describe('operations refresh requests',()=>{
   it('publishes healthy services while another hangs, then settles its timeout without losing data',async()=>{
     vi.useFakeTimers();
     const requests = controlledNetwork();
-    const store = createOperationsData('operator');
+    const store = createOperationsData(createDemoSession('operator'));
     const initial = store.refresh();
     finish(requests,1);
     await initial;
@@ -178,7 +179,7 @@ function finishHistory(requests:PendingRequest[],items:Change[],nextCursor:strin
 describe('completed change history',()=>{
   it('keeps unfinished changes visible and polls the selected history page until navigation',async()=>{
     const requests = controlledNetwork();
-    const store = createOperationsData('operator');
+    const store = createOperationsData(createDemoSession('operator'));
     const firstPage = store.refresh();
     finishHistory(requests,[change('active','awaiting_approval'),change('recent','completed')],'older+/=');
     await firstPage;
@@ -207,7 +208,7 @@ describe('completed change history',()=>{
 
   it('retains the displayed page after a failed page request and retries the same cursor',async()=>{
     const requests = controlledNetwork();
-    const store = createOperationsData('operator');
+    const store = createOperationsData(createDemoSession('operator'));
     const firstPage = store.refresh();
     finishHistory(requests,[change('active','approved'),change('recent','completed')],'older');
     await firstPage;

@@ -1,0 +1,19 @@
+{
+  "auth": {
+    "mode": "oidc",
+    "issuer": "https://identity.example.invalid/realms/operations",
+    "client_id": "unum-web",
+    "redirect_uri": "https://dcim.example.invalid/auth/callback",
+    "post_logout_redirect_uri": "https://dcim.example.invalid/",
+    "scope": "openid profile email unum.api",
+    "acr_values": "urn:unum:acr:staff-mfa",
+    "google_provider": "google"
+  },
+  "services": {
+    "inventory": "https://inventory.internal.example.invalid",
+    "placement": "https://placement.internal.example.invalid",
+    "workflow": "https://workflow.internal.example.invalid",
+    "synchronization": "https://synchronization.internal.example.invalid",
+    "registry": "https://registry.internal.example.invalid"
+  }
+}

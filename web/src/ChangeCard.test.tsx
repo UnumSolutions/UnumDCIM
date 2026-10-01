@@ -29,4 +29,10 @@ describe('change recovery controls',()=>{
     expect(render('replan_required','approver')).toMatch(/disabled=""[^>]*>Re-plan move/);
     expect(render('completed')).not.toContain('Re-plan move');
   });
+  it('does not offer viewer access to proposing, approval, or execution and uses production labels',()=>{
+    expect(render('replan_required','viewer')).toMatch(/disabled=""[^>]*>Re-plan move/);
+    expect(render('awaiting_approval','viewer')).toMatch(/disabled=""[^>]*>Approve change/);
+    expect(render('approved','viewer')).toMatch(/disabled=""[^>]*>Execute approved move/);
+    expect(render('awaiting_approval','approver')).not.toContain('Approve as Jordan');
+  });
 });

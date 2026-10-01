@@ -9,10 +9,11 @@ type Props = {
   onSelectAsset: (id: string) => void;
   face: 'front' | 'rear';
   ghost: Ghost | null;
+  demo?:boolean;
 };
 
 export default function RackElevations({racks, selectedRackIds, placements, assets,
-  selectedAsset, onSelectAsset, face, ghost}: Props) {
+  selectedAsset, onSelectAsset, face, ghost,demo=false}: Props) {
   const selected = racks.filter(rack => selectedRackIds.includes(rack.id));
   if (!selected.length) return <div className="empty elevation-empty" role="status">
     Select one or more cabinets from the sidebar or floor plan to view their elevations.
@@ -80,6 +81,6 @@ export default function RackElevations({racks, selectedRackIds, placements, asse
         </article>;
       })}
     </div>
-    <p className="elevation-note">Full-depth assets occupy both faces · synthetic equipment</p>
+    <p className="elevation-note">Full-depth assets occupy both faces{demo?' · synthetic equipment':''}</p>
   </section>;
 }

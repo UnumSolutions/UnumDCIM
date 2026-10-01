@@ -14,6 +14,7 @@ contracts={
 'synchronization':{'/status':['get'],'/rehearsal':['post'],'/conflicts/{conflict_id}/resolve':['post']},
 'registry':{'/modules':['get'],'/preflight':['post']}}
 for service,paths in contracts.items():
+    paths = {'/identity':['get']} | paths
     doc={'openapi':'3.1.0','info':{'title':'UnumDCIM '+service,'version':'0.1.0','description':'Foundation API. Production human access requires signed OIDC access tokens with MFA; synthetic static identities are demo-only.'},'servers':[{'url':'/api/v1'}],'security':[{'bearer':[]}],'paths':{},'components':{'securitySchemes':{'bearer':{'type':'http','scheme':'bearer'}},'schemas':{'MoveProposal':move}}}
     for path,methods in paths.items():
         ops={}
@@ -31,6 +32,10 @@ for service,paths in contracts.items():
             if schema:operation['requestBody']={'required':True,'content':{'application/json':{'schema':schema}}}
             ops[method]=operation
         doc['paths'][path]=ops
+    operation = doc['paths']['/identity']['get']
+    operation['description'] = 'Returns the authenticated actor and effective tenant, site, and role grants. Browser sessions use this verified identity rather than unverified token claims. The response is not cached.'
+    operation['responses']['200']['content'] = {'application/json': {'schema': {'type':'object', 'additionalProperties':False, 'required':['actor','tenant','sites','role'], 'properties': {
+        'actor':string, 'tenant':string, 'sites':{'type':'array','items':string}, 'role':{'enum':['viewer','operator','approver','admin','service']}}}}}
     if service == 'placement':
         doc['paths']['/reservations']['post']['description'] = 'Creates a reservation under the authenticated tenant/site scope or returns an existing reservation for the same request ID and command. The service credential and delegated caller credential are both verified; effective scope is their intersection. A definitive validation rejection has code plan_invalid.'
         operation = doc['paths']['/reservations/{request_id}/commit']['post']

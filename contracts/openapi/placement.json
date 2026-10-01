@@ -16,6 +16,69 @@
     }
   ],
   "paths": {
+    "/identity": {
+      "get": {
+        "operationId": "placement_get__identity",
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "actor",
+                    "tenant",
+                    "sites",
+                    "role"
+                  ],
+                  "properties": {
+                    "actor": {
+                      "type": "string"
+                    },
+                    "tenant": {
+                      "type": "string"
+                    },
+                    "sites": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "role": {
+                      "enum": [
+                        "viewer",
+                        "operator",
+                        "approver",
+                        "admin",
+                        "service"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Scope or role denied"
+          },
+          "409": {
+            "description": "Revision, ownership, occupancy or workflow conflict"
+          },
+          "503": {
+            "description": "Dependency temporarily unavailable"
+          }
+        },
+        "description": "Returns the authenticated actor and effective tenant, site, and role grants. Browser sessions use this verified identity rather than unverified token claims. The response is not cached."
+      }
+    },
     "/scene": {
       "get": {
         "operationId": "placement_get__scene",

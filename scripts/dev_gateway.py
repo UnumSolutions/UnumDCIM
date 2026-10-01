@@ -17,6 +17,13 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*a, directory=str(ROOT / "web/dist"), **kw)
 
     def do_GET(self):
+        if self.path == "/auth/config":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(b'{"mode":"demo"}')
+            return
         if self.path.startswith("/api/"):
             return self.proxy()
         if self.path == "/":
