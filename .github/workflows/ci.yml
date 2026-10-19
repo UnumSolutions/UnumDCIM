@@ -53,7 +53,7 @@ jobs:
       - run: mkdir -p ../.data/ci
       - run: npm run test -- --reporter=default --reporter=junit --outputFile=../.data/ci/frontend.xml 2>&1 | tee ../.data/ci/frontend-test.log
       - run: npm run build 2>&1 | tee ../.data/ci/frontend-build.log
-      - run: npm audit --omit=dev --audit-level=high 2>&1 | tee ../.data/ci/frontend-audit.log
+      - run: npm audit --include=dev --audit-level=high 2>&1 | tee ../.data/ci/frontend-audit.log
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
