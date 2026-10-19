@@ -10,6 +10,59 @@ on Linux arm64. Helm 4.3.0 lint and rendering passed for all five module values,
 including rejection checks for unsafe or missing configuration. Kubernetes and
 Ansible execution remain unverified.
 
+## Continuous validation
+
+The [Foundation contracts workflow](../.github/workflows/ci.yml) retains the
+backend, frontend, PostgreSQL/JetStream, gateway and synthetic identity gates.
+It also builds all five module images and runs the smoke check below, and
+validates the Helm chart and Ansible playbook without applying infrastructure.
+Every push and pull request runs every gate. `CI required checks` succeeds only
+when all validation jobs succeed; failed, cancelled or skipped jobs fail it.
+
+Jobs retain narrowly scoped logs, JUnit reports, rendered manifests and JSON
+evidence for 14 days, including on failure. Inspect each job's artifact if it
+fails; failures before a report is created remain in the Actions log. The
+PostgreSQL/JetStream gate intentionally runs the full suite again with real
+services to preserve both SQLite and PostgreSQL behavior coverage.
+
+Dependency caches contain pip/npm downloads keyed by their respective lock or
+CI requirements files. Module images share local build layers within one job;
+CI does not publish images. Actions use verified release commit SHAs and the
+Python, PostgreSQL and NATS images use manifest digests. Update pins explicitly
+and rerun validation when adopting a new release; a pinned digest does not
+automatically receive security updates.
+
+The Ubuntu 24.04 jobs allow 10 minutes for ordinary validation, 15 minutes for
+PostgreSQL/JetStream, and 20 minutes for the five-image build/smoke gate. The
+existing successful jobs took roughly 22–93 seconds in the two October 1 runs;
+the new image gate needs its first hosted measurement. New PR revisions cancel
+superseded runs. Push runs use unique concurrency groups so every branch or tag
+push keeps its validation run, including when other runs are queued.
+
+Run the static deployment checks locally with Python 3.12+ in a separate virtual
+environment (the application images do not install these tools):
+
+```sh
+python3.12 -m venv .data/ci-tools
+.data/ci-tools/bin/python -m pip install -r deploy/requirements-ci.txt
+.data/ci-tools/bin/python scripts/install_ci_helm.py
+.data/ci-tools/bin/python scripts/check_helm.py --helm .data/ci/bin/helm
+PATH="$PWD/.data/ci-tools/bin:$PATH" .data/ci-tools/bin/python scripts/check_ansible.py
+```
+
+The installer verifies the fixed Helm archive checksum and writes only into
+the workspace. It supports Linux amd64 (CI) and macOS arm64; other platforms
+can supply their own verified Helm 4.3.1 binary to `--helm`. Helm checks cover
+all five modules, rendered isolation and credential settings, and 13 expected
+unsafe-value rejections. Ansible runs syntax checking and strict offline lint
+only. Reports are under `.data/ci/deployment/`; module smoke reports default to
+`.data/qualification/image-smoke.json` (override with `--report`).
+
+These are packaging and static validation gates. They do not qualify Kubernetes
+admission, rollout, Linux host execution, infrastructure HA, restore, customer
+identity or live Nlyte behavior. Docker-dependent gates require a running Docker
+engine; passing static checks on a Mac does not establish their Linux results.
+
 ## Module images
 
 Build each implementation separately, then run the isolated smoke check:

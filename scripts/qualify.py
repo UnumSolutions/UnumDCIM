@@ -11,7 +11,10 @@ import time
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
-IMAGES = {"postgres": "postgres:17", "nats": "nats:2.11-alpine"}
+IMAGES = {
+    "postgres": "postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3",
+    "nats": "nats:2.11-alpine@sha256:e4bf19f15fd3218814a4e3c9e0064e1334bd8aa20d5984b9f1a0afd084f8cc00",
+}
 
 
 def docker(*args, **kwargs):
